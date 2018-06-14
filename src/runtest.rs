@@ -10,7 +10,7 @@
 
 use common::{Config, TestPaths};
 use common::{CompileFail, ParseFail, Pretty, RunFail, RunPass};
-use common::{DebugInfoLldb, DebugInfoGdb};
+use common::{DebugInfoGdb};
 use common::{RunMake, Ui};
 use diff;
 use errors::{self, ErrorKind, Error};
@@ -123,7 +123,6 @@ impl<'test> TestCx<'test> {
             RunPass => self.run_rpass_test(),
             Pretty => self.run_pretty_test(),
             DebugInfoGdb => self.run_debuginfo_gdb_test(),
-            DebugInfoLldb => self.run_debuginfo_lldb_test(),
             RunMake => self.run_rmake_test(),
             Ui => self.run_ui_test(),
         }
@@ -632,151 +631,6 @@ actual:\n\
         }
 
         self.check_debugger_output(&debugger_run_result, &check_lines);
-    }
-
-    fn run_debuginfo_lldb_test(&self) {
-        assert!(self.revision.is_none(), "revisions not relevant here");
-
-        if self.config.lldb_python_dir.is_none() {
-            self.fatal("Can't run LLDB test because LLDB's python path is not set.");
-        }
-
-        let config = Config {
-            target_rustcflags: self.cleanup_debug_info_options(&self.config.target_rustcflags),
-            host_rustcflags: self.cleanup_debug_info_options(&self.config.host_rustcflags),
-            .. self.config.clone()
-        };
-
-
-        let test_cx = TestCx {
-            config: &config,
-            ..*self
-        };
-
-        test_cx.run_debuginfo_lldb_test_no_opt();
-    }
-
-    fn run_debuginfo_lldb_test_no_opt(&self) {
-        // compile test file (it should have 'compile-flags:-g' in the header)
-        let compile_result = self.compile_test();
-        if !compile_result.status.success() {
-            self.fatal_proc_rec("compilation failed!", &compile_result);
-        }
-
-        let exe_file = self.make_exe_name();
-
-        match self.config.lldb_version {
-            Some(ref version) => {
-                println!("NOTE: compiletest thinks it is using LLDB version {}",
-                         version);
-            }
-            _ => {
-                println!("NOTE: compiletest does not know which version of \
-                          LLDB it is using");
-            }
-        }
-
-        // Parse debugger commands etc from test files
-        let DebuggerCommands {
-            commands,
-            check_lines,
-            breakpoint_lines,
-            ..
-        } = self.parse_debugger_commands(&["lldb"]);
-
-        // Write debugger script:
-        // We don't want to hang when calling `quit` while the process is still running
-        let mut script_str = String::from("settings set auto-confirm true\n");
-
-        // Make LLDB emit its version, so we have it documented in the test output
-        script_str.push_str("version\n");
-
-        // Switch LLDB into "Rust mode"
-        let rust_src_root = self.config.find_rust_src_root().expect(
-            "Could not find Rust source root",
-        );
-        let rust_pp_module_rel_path = Path::new("./src/etc/lldb_rust_formatters.py");
-        let rust_pp_module_abs_path = rust_src_root.join(rust_pp_module_rel_path)
-                                                   .to_str()
-                                                   .unwrap()
-                                                   .to_owned();
-
-        script_str.push_str(&format!("command script import {}\n",
-                                     &rust_pp_module_abs_path[..])[..]);
-        script_str.push_str("type summary add --no-value ");
-        script_str.push_str("--python-function lldb_rust_formatters.print_val ");
-        script_str.push_str("-x \".*\" --category Rust\n");
-        script_str.push_str("type category enable Rust\n");
-
-        // Set breakpoints on every line that contains the string "#break"
-        let source_file_name = self.testpaths.file.file_name().unwrap().to_string_lossy();
-        for line in &breakpoint_lines {
-            script_str.push_str(&format!("breakpoint set --file '{}' --line {}\n",
-                                         source_file_name,
-                                         line));
-        }
-
-        // Append the other commands
-        for line in &commands {
-            script_str.push_str(line);
-            script_str.push_str("\n");
-        }
-
-        // Finally, quit the debugger
-        script_str.push_str("\nquit\n");
-
-        // Write the script into a file
-        debug!("script_str = {}", script_str);
-        self.dump_output_file(&script_str, "debugger.script");
-        let debugger_script = self.make_out_name("debugger.script");
-
-        // Let LLDB execute the script via lldb_batchmode.py
-        let debugger_run_result = self.run_lldb(&exe_file,
-                                                &debugger_script,
-                                                &rust_src_root);
-
-        if !debugger_run_result.status.success() {
-            self.fatal_proc_rec("Error while running LLDB", &debugger_run_result);
-        }
-
-        self.check_debugger_output(&debugger_run_result, &check_lines);
-    }
-
-    fn run_lldb(&self,
-                test_executable: &Path,
-                debugger_script: &Path,
-                rust_src_root: &Path)
-                -> ProcRes {
-        // Prepare the lldb_batchmode which executes the debugger script
-        let lldb_script_path = rust_src_root.join("src/etc/lldb_batchmode.py");
-        self.cmd2procres(Command::new(&self.config.lldb_python)
-                         .arg(&lldb_script_path)
-                         .arg(test_executable)
-                         .arg(debugger_script)
-                         .env("PYTHONPATH",
-                              self.config.lldb_python_dir.as_ref().unwrap()))
-    }
-
-    fn cmd2procres(&self, cmd: &mut Command) -> ProcRes {
-        let (status, out, err) = match cmd.output() {
-            Ok(Output { status, stdout, stderr }) => {
-                (status,
-                 String::from_utf8(stdout).unwrap(),
-                 String::from_utf8(stderr).unwrap())
-            },
-            Err(e) => {
-                self.fatal(&format!("Failed to setup Python process for \
-                                      LLDB script: {}", e))
-            }
-        };
-
-        self.dump_output(&out, &err);
-        ProcRes {
-            status,
-            stdout: out,
-            stderr: err,
-            cmdline: format!("{:?}", cmd)
-        }
     }
 
     fn parse_debugger_commands(&self, debugger_prefixes: &[&str]) -> DebuggerCommands {
@@ -1337,7 +1191,6 @@ actual:\n\
             RunFail |
             Pretty |
             DebugInfoGdb |
-            DebugInfoLldb |
             RunMake |
             Ui => {
                 // do not use JSON output

@@ -43,7 +43,6 @@ impl EarlyProps {
                 props.ignore ||
                 config.parse_cfg_name_directive(ln, "ignore") ||
                 ignore_gdb(config, ln) ||
-                ignore_lldb(config, ln) ||
                 ignore_llvm(config, ln);
 
             if let Some(s) = config.parse_aux_build(ln) {
@@ -112,28 +111,6 @@ impl EarlyProps {
                     (v_min, v_max)
                 }
                 _ => panic!(ERROR_MESSAGE),
-            }
-        }
-
-        fn ignore_lldb(config: &Config, line: &str) -> bool {
-            if config.mode != common::DebugInfoLldb {
-                return false;
-            }
-
-            if let Some(ref actual_version) = config.lldb_version {
-                if line.starts_with("min-lldb-version") {
-                    let min_version = line.trim_right()
-                        .rsplit(' ')
-                        .next()
-                        .expect("Malformed lldb version directive");
-                    // Ignore if actual version is smaller the minimum required
-                    // version
-                    lldb_version_to_int(actual_version) < lldb_version_to_int(min_version)
-                } else {
-                    false
-                }
-            } else {
-                false
             }
         }
 
@@ -546,7 +523,6 @@ impl Config {
                 Some(name) == util::get_env(&self.target) ||        // env
                 match self.mode {
                     common::DebugInfoGdb => name == "gdb",
-                    common::DebugInfoLldb => name == "lldb",
                     common::Pretty => name == "pretty",
                     _ => false,
                 } ||

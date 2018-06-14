@@ -44,7 +44,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use common::{Mode, TestPaths};
-use common::{Pretty, DebugInfoGdb, DebugInfoLldb};
+use common::{Pretty, DebugInfoGdb};
 
 use self::header::EarlyProps;
 
@@ -70,13 +70,6 @@ pub fn run_tests(config: &Config) {
         // so, we test 1 thread at once.
         // also trying to isolate problems with adb_run_wrapper.sh ilooping
         env::set_var("RUST_TEST_THREADS","1");
-    }
-
-    if let DebugInfoLldb = config.mode {
-        // Some older versions of LLDB seem to have problems with multiple
-        // instances running in parallel, so only run one test task at a
-        // time.
-        env::set_var("RUST_TEST_TASKS", "1");
     }
 
     let opts = test_opts(config);
