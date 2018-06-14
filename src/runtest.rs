@@ -9,7 +9,7 @@
 // except according to those terms.
 
 use common::{Config, TestPaths};
-use common::{CompileFail, ParseFail, Pretty, RunFail, RunPass};
+use common::{CompileFail, Pretty, RunFail, RunPass};
 use common::{RunMake, Ui};
 use diff;
 use errors::{self, ErrorKind, Error};
@@ -103,8 +103,7 @@ impl<'test> TestCx<'test> {
     /// revisions, exactly once, with revision == None).
     fn run_revision(&self) {
         match self.config.mode {
-            CompileFail |
-            ParseFail => self.run_cfail_test(),
+            CompileFail => self.run_cfail_test(),
             RunFail => self.run_rfail_test(),
             RunPass => self.run_rpass_test(),
             Pretty => self.run_pretty_test(),
@@ -782,8 +781,7 @@ actual:\n\
         }
 
         match self.config.mode {
-            CompileFail |
-            ParseFail => {
+            CompileFail => {
                 // If we are extracting and matching errors in the new
                 // fashion, then you want JSON mode. Old-skool error
                 // patterns still match the raw compiler output.
