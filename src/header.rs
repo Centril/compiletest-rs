@@ -125,9 +125,6 @@ pub struct TestProps {
     pub must_compile_successfully: bool,
     // rustdoc will test the output of the `--test` option
     pub check_test_line_numbers_match: bool,
-    // The test must be compiled and run successfully. Only used in UI tests for
-    // now.
-    pub run_pass: bool,
     // customized normalization rules
     pub normalize_stdout: Vec<(String, String)>,
     pub normalize_stderr: Vec<(String, String)>,
@@ -155,7 +152,6 @@ impl TestProps {
             forbid_output: vec![],
             must_compile_successfully: false,
             check_test_line_numbers_match: false,
-            run_pass: false,
             normalize_stdout: vec![],
             normalize_stderr: vec![],
         }
@@ -266,10 +262,6 @@ impl TestProps {
 
             if !self.check_test_line_numbers_match {
                 self.check_test_line_numbers_match = config.parse_check_test_line_numbers_match(ln);
-            }
-
-            if !self.run_pass {
-                self.run_pass = config.parse_run_pass(ln);
             }
 
             if let Some(rule) = config.parse_custom_normalization(ln, "normalize-stdout") {
@@ -389,10 +381,6 @@ impl Config {
 
     fn parse_check_test_line_numbers_match(&self, line: &str) -> bool {
         self.parse_name_directive(line, "check-test-line-numbers-match")
-    }
-
-    fn parse_run_pass(&self, line: &str) -> bool {
-        self.parse_name_directive(line, "run-pass")
     }
 
     fn parse_env(&self, line: &str, name: &str) -> Option<(String, String)> {
