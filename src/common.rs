@@ -29,7 +29,6 @@ pub enum Mode {
     Pretty,
     DebugInfoGdb,
     DebugInfoLldb,
-    Codegen,
     RunMake,
     Ui,
 }
@@ -59,7 +58,6 @@ impl FromStr for Mode {
             "pretty" => Ok(Pretty),
             "debuginfo-lldb" => Ok(DebugInfoLldb),
             "debuginfo-gdb" => Ok(DebugInfoGdb),
-            "codegen" => Ok(Codegen),
             "run-make" => Ok(RunMake),
             "ui" => Ok(Ui),
             _ => Err(()),
@@ -77,7 +75,6 @@ impl fmt::Display for Mode {
                               Pretty => "pretty",
                               DebugInfoGdb => "debuginfo-gdb",
                               DebugInfoLldb => "debuginfo-lldb",
-                              Codegen => "codegen",
                               RunMake => "run-make",
                               Ui => "ui",
                           },

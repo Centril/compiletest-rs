@@ -10,7 +10,7 @@
 
 use common::{Config, TestPaths};
 use common::{CompileFail, ParseFail, Pretty, RunFail, RunPass};
-use common::{Codegen, DebugInfoLldb, DebugInfoGdb};
+use common::{DebugInfoLldb, DebugInfoGdb};
 use common::{RunMake, Ui};
 use diff;
 use errors::{self, ErrorKind, Error};
@@ -124,7 +124,6 @@ impl<'test> TestCx<'test> {
             Pretty => self.run_pretty_test(),
             DebugInfoGdb => self.run_debuginfo_gdb_test(),
             DebugInfoLldb => self.run_debuginfo_lldb_test(),
-            Codegen => self.run_codegen_test(),
             RunMake => self.run_rmake_test(),
             Ui => self.run_ui_test(),
         }
@@ -1339,7 +1338,6 @@ actual:\n\
             Pretty |
             DebugInfoGdb |
             DebugInfoLldb |
-            Codegen |
             RunMake |
             Ui => {
                 // do not use JSON output
@@ -1553,44 +1551,6 @@ actual:\n\
     }
 
     // codegen tests (using FileCheck)
-
-    fn compile_test_and_save_ir(&self) -> ProcRes {
-        let aux_dir = self.aux_output_dir_name();
-
-        let output_file = TargetLocation::ThisDirectory(
-            self.output_base_name().parent().unwrap().to_path_buf());
-        let mut rustc = self.make_compile_args(&self.testpaths.file, output_file);
-        rustc.arg("-L").arg(aux_dir)
-            .arg("--emit=llvm-ir");
-
-        self.compose_and_run_compiler(rustc, None)
-    }
-
-    fn check_ir_with_filecheck(&self) -> ProcRes {
-        let irfile = self.output_base_name().with_extension("ll");
-        let mut filecheck = Command::new(self.config.llvm_filecheck.as_ref().unwrap());
-        filecheck.arg("--input-file").arg(irfile)
-            .arg(&self.testpaths.file);
-        self.compose_and_run(filecheck, "", None, None)
-    }
-
-    fn run_codegen_test(&self) {
-        assert!(self.revision.is_none(), "revisions not relevant here");
-
-        if self.config.llvm_filecheck.is_none() {
-            self.fatal("missing --llvm-filecheck");
-        }
-
-        let mut proc_res = self.compile_test_and_save_ir();
-        if !proc_res.status.success() {
-            self.fatal_proc_rec("compilation failed!", &proc_res);
-        }
-
-        proc_res = self.check_ir_with_filecheck();
-        if !proc_res.status.success() {
-            self.fatal_proc_rec("verification with 'FileCheck' failed", &proc_res);
-        }
-    }
 
     fn charset() -> &'static str {
         // FreeBSD 10.1 defaults to GDB 6.1.1 which doesn't support "auto" charset
