@@ -10,7 +10,7 @@
 
 use common::{Config, TestPaths};
 use common::{CompileFail, ParseFail, Pretty, RunFail, RunPass};
-use common::{Codegen, DebugInfoLldb, DebugInfoGdb, CodegenUnits};
+use common::{Codegen, DebugInfoLldb, DebugInfoGdb};
 use common::{RunMake, Ui};
 use diff;
 use errors::{self, ErrorKind, Error};
@@ -18,7 +18,6 @@ use json;
 use header::TestProps;
 use util::logv;
 
-use std::collections::HashSet;
 use std::env;
 use std::ffi::OsString;
 use std::fs::{self, File, create_dir_all};
@@ -126,7 +125,6 @@ impl<'test> TestCx<'test> {
             DebugInfoGdb => self.run_debuginfo_gdb_test(),
             DebugInfoLldb => self.run_debuginfo_lldb_test(),
             Codegen => self.run_codegen_test(),
-            CodegenUnits => self.run_codegen_units_test(),
             RunMake => self.run_rmake_test(),
             Ui => self.run_ui_test(),
         }
@@ -1343,8 +1341,7 @@ actual:\n\
             DebugInfoLldb |
             Codegen |
             RunMake |
-            Ui |
-            CodegenUnits => {
+            Ui => {
                 // do not use JSON output
             }
         }
@@ -1603,160 +1600,6 @@ actual:\n\
             "ISO-8859-1"
         } else {
             "UTF-8"
-        }
-    }
-
-    fn run_codegen_units_test(&self) {
-        assert!(self.revision.is_none(), "revisions not relevant here");
-
-        let proc_res = self.compile_test();
-
-        if !proc_res.status.success() {
-            self.fatal_proc_rec("compilation failed!", &proc_res);
-        }
-
-        self.check_no_compiler_crash(&proc_res);
-
-        const PREFIX: &'static str = "TRANS_ITEM ";
-        const CGU_MARKER: &'static str = "@@";
-
-        let actual: Vec<TransItem> = proc_res
-            .stdout
-            .lines()
-            .filter(|line| line.starts_with(PREFIX))
-            .map(str_to_trans_item)
-            .collect();
-
-        let expected: Vec<TransItem> = errors::load_errors(&self.testpaths.file, None)
-            .iter()
-            .map(|e| str_to_trans_item(&e.msg[..]))
-            .collect();
-
-        let mut missing = Vec::new();
-        let mut wrong_cgus = Vec::new();
-
-        for expected_item in &expected {
-            let actual_item_with_same_name = actual.iter()
-                                                   .find(|ti| ti.name == expected_item.name);
-
-            if let Some(actual_item) = actual_item_with_same_name {
-                if !expected_item.codegen_units.is_empty() &&
-                   // Also check for codegen units
-                   expected_item.codegen_units != actual_item.codegen_units {
-                    wrong_cgus.push((expected_item.clone(), actual_item.clone()));
-                }
-            } else {
-                missing.push(expected_item.string.clone());
-            }
-        }
-
-        let unexpected: Vec<_> =
-            actual.iter()
-                  .filter(|acgu| !expected.iter().any(|ecgu| acgu.name == ecgu.name))
-                  .map(|acgu| acgu.string.clone())
-                  .collect();
-
-        if !missing.is_empty() {
-            missing.sort();
-
-            println!("\nThese items should have been contained but were not:\n");
-
-            for item in &missing {
-                println!("{}", item);
-            }
-
-            println!("\n");
-        }
-
-        if !unexpected.is_empty() {
-            let sorted = {
-                let mut sorted = unexpected.clone();
-                sorted.sort();
-                sorted
-            };
-
-            println!("\nThese items were contained but should not have been:\n");
-
-            for item in sorted {
-                println!("{}", item);
-            }
-
-            println!("\n");
-        }
-
-        if !wrong_cgus.is_empty() {
-            wrong_cgus.sort_by_key(|pair| pair.0.name.clone());
-            println!("\nThe following items were assigned to wrong codegen units:\n");
-
-            for &(ref expected_item, ref actual_item) in &wrong_cgus {
-                println!("{}", expected_item.name);
-                println!("  expected: {}", codegen_units_to_str(&expected_item.codegen_units));
-                println!("  actual:   {}", codegen_units_to_str(&actual_item.codegen_units));
-                println!("");
-            }
-        }
-
-        if !(missing.is_empty() && unexpected.is_empty() && wrong_cgus.is_empty())
-        {
-            panic!();
-        }
-
-        #[derive(Clone, Eq, PartialEq)]
-        struct TransItem {
-            name: String,
-            codegen_units: HashSet<String>,
-            string: String,
-        }
-
-        // [TRANS_ITEM] name [@@ (cgu)+]
-        fn str_to_trans_item(s: &str) -> TransItem {
-            let s = if s.starts_with(PREFIX) {
-                (&s[PREFIX.len()..]).trim()
-            } else {
-                s.trim()
-            };
-
-            let full_string = format!("{}{}", PREFIX, s.trim().to_owned());
-
-            let parts: Vec<&str> = s.split(CGU_MARKER)
-                                    .map(str::trim)
-                                    .filter(|s| !s.is_empty())
-                                    .collect();
-
-            let name = parts[0].trim();
-
-            let cgus = if parts.len() > 1 {
-                let cgus_str = parts[1];
-
-                cgus_str.split(' ')
-                        .map(str::trim)
-                        .filter(|s| !s.is_empty())
-                        .map(str::to_owned)
-                        .collect()
-            }
-            else {
-                HashSet::new()
-            };
-
-            TransItem {
-                name: name.to_owned(),
-                codegen_units: cgus,
-                string: full_string,
-            }
-        }
-
-        fn codegen_units_to_str(cgus: &HashSet<String>) -> String
-        {
-            let mut cgus: Vec<_> = cgus.iter().collect();
-            cgus.sort();
-
-            let mut string = String::new();
-            for cgu in cgus {
-                string.push_str(&cgu[..]);
-                string.push_str(" ");
-            }
-
-            string
         }
     }
 
