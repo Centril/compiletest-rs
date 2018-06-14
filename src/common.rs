@@ -85,13 +85,6 @@ pub struct Config {
     /// The llvm FileCheck binary path
     pub llvm_filecheck: Option<PathBuf>,
 
-    /// The valgrind path
-    pub valgrind_path: Option<String>,
-
-    /// Whether to fail if we can't run run-pass-valgrind tests under valgrind
-    /// (or, alternatively, to silently run them like regular run-pass tests).
-    pub force_valgrind: bool,
-
     /// The directory containing the tests to run
     pub src_base: PathBuf,
 
@@ -292,8 +285,6 @@ impl Default for Config {
             rustdoc_path: None,
             lldb_python: "python".to_owned(),
             docck_python: "docck-python".to_owned(),
-            valgrind_path: None,
-            force_valgrind: false,
             llvm_filecheck: None,
             src_base: PathBuf::from("tests/run-pass"),
             build_base: env::temp_dir(),
