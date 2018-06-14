@@ -76,9 +76,6 @@ pub struct Config {
     /// The rustdoc executable
     pub rustdoc_path: Option<PathBuf>,
 
-    /// The python executable to use for LLDB
-    pub lldb_python: String,
-
     /// The python executable to use for htmldocck
     pub docck_python: String,
 
@@ -134,9 +131,6 @@ pub struct Config {
     /// Whether GDB has native rust support
     pub gdb_native_rust: bool,
 
-    /// Version of LLDB
-    pub lldb_version: Option<String>,
-
     /// Version of LLVM
     pub llvm_version: Option<String>,
 
@@ -154,9 +148,6 @@ pub struct Config {
 
     /// status whether android device available or not
     pub adb_device_status: bool,
-
-    /// the path containing LLDB's Python module
-    pub lldb_python_dir: Option<String>,
 
     /// Explain what's going on
     pub verbose: bool,
@@ -283,7 +274,6 @@ impl Default for Config {
             run_lib_path: PathBuf::from(""),
             rustc_path: PathBuf::from("rustc"),
             rustdoc_path: None,
-            lldb_python: "python".to_owned(),
             docck_python: "docck-python".to_owned(),
             llvm_filecheck: None,
             src_base: PathBuf::from("tests/run-pass"),
@@ -308,14 +298,12 @@ impl Default for Config {
             gdb: None,
             gdb_version: None,
             gdb_native_rust: false,
-            lldb_version: None,
             llvm_version: None,
             system_llvm: false,
             android_cross_path: PathBuf::from("android-cross-path"),
             adb_path: "adb-path".to_owned(),
             adb_test_dir: "adb-test-dir/target".to_owned(),
             adb_device_status: false,
-            lldb_python_dir: None,
             verbose: false,
             quiet: false,
             color: ColorConfig::AutoColor,
