@@ -9,7 +9,7 @@
 // except according to those terms.
 
 use common::{Config, TestPaths};
-use common::{CompileFail, ParseFail, Pretty, RunFail, RunPass, RunPassValgrind};
+use common::{CompileFail, ParseFail, Pretty, RunFail, RunPass};
 use common::{Codegen, DebugInfoLldb, DebugInfoGdb, Rustdoc, CodegenUnits};
 use common::{Incremental, RunMake, Ui};
 use diff;
@@ -126,7 +126,6 @@ impl<'test> TestCx<'test> {
             ParseFail => self.run_cfail_test(),
             RunFail => self.run_rfail_test(),
             RunPass => self.run_rpass_test(),
-            RunPassValgrind => self.run_valgrind_test(),
             Pretty => self.run_pretty_test(),
             DebugInfoGdb => self.run_debuginfo_gdb_test(),
             DebugInfoLldb => self.run_debuginfo_lldb_test(),
@@ -231,30 +230,6 @@ impl<'test> TestCx<'test> {
                 "run-pass tests with expected warnings should be moved to ui/");
 
         let proc_res = self.exec_compiled_test();
-
-        if !proc_res.status.success() {
-            self.fatal_proc_rec("test run failed!", &proc_res);
-        }
-    }
-
-    fn run_valgrind_test(&self) {
-        assert!(self.revision.is_none(), "revisions not relevant here");
-
-        if self.config.valgrind_path.is_none() {
-            assert!(!self.config.force_valgrind);
-            return self.run_rpass_test();
-        }
-
-        let mut proc_res = self.compile_test();
-
-        if !proc_res.status.success() {
-            self.fatal_proc_rec("compilation failed!", &proc_res);
-        }
-
-        let mut new_config = self.config.clone();
-        new_config.runtool = new_config.valgrind_path.clone();
-        let new_cx = TestCx { config: &new_config, ..*self };
-        proc_res = new_cx.exec_compiled_test();
 
         if !proc_res.status.success() {
             self.fatal_proc_rec("test run failed!", &proc_res);
@@ -1407,7 +1382,6 @@ actual:\n\
             }
             RunPass |
             RunFail |
-            RunPassValgrind |
             Pretty |
             DebugInfoGdb |
             DebugInfoLldb |

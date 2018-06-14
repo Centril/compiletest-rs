@@ -15,6 +15,11 @@
 #![cfg_attr(not(feature = "stable"), feature(slice_rotate))]
 
 #![deny(unused_imports)]
+#![deny(non_snake_case)]
+#![deny(unused_variables)]
+#![deny(unreachable_patterns)]
+#![deny(dead_code)]
+
 
 #[cfg(not(feature = "norustc"))]
 extern crate rustc;
