@@ -23,7 +23,6 @@ use runtest::dylib_env_var;
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Mode {
     CompileFail,
-    RunFail,
     RunPass,
     Pretty,
     Ui,
@@ -46,7 +45,6 @@ impl FromStr for Mode {
     fn from_str(s: &str) -> Result<Mode, ()> {
         match s {
             "compile-fail" => Ok(CompileFail),
-            "run-fail" => Ok(RunFail),
             "run-pass" => Ok(RunPass),
             "pretty" => Ok(Pretty),
             "ui" => Ok(Ui),
@@ -59,7 +57,6 @@ impl fmt::Display for Mode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Display::fmt(match *self {
                               CompileFail => "compile-fail",
-                              RunFail => "run-fail",
                               RunPass => "run-pass",
                               Pretty => "pretty",
                               Ui => "ui",

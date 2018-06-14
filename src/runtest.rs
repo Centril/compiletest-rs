@@ -9,7 +9,7 @@
 // except according to those terms.
 
 use common::{Config, TestPaths};
-use common::{CompileFail, Pretty, RunFail, RunPass};
+use common::{CompileFail, Pretty, RunPass};
 use common::Ui;
 use diff;
 use errors::{self, ErrorKind, Error};
@@ -104,7 +104,6 @@ impl<'test> TestCx<'test> {
     fn run_revision(&self) {
         match self.config.mode {
             CompileFail => self.run_cfail_test(),
-            RunFail => self.run_rfail_test(),
             RunPass => self.run_rpass_test(),
             Pretty => self.run_pretty_test(),
             Ui => self.run_ui_test(),
@@ -148,26 +147,6 @@ impl<'test> TestCx<'test> {
 
         self.check_no_compiler_crash(&proc_res);
         self.check_forbid_output(&output_to_check, &proc_res);
-    }
-
-    fn run_rfail_test(&self) {
-        let proc_res = self.compile_test();
-
-        if !proc_res.status.success() {
-            self.fatal_proc_rec("compilation failed!", &proc_res);
-        }
-
-        let proc_res = self.exec_compiled_test();
-
-        // The value our Makefile configures valgrind to return on failure
-        const VALGRIND_ERR: i32 = 100;
-        if proc_res.status.code() == Some(VALGRIND_ERR) {
-            self.fatal_proc_rec("run-fail test isn't valgrind-clean!", &proc_res);
-        }
-
-        let output_to_check = self.get_output(&proc_res);
-        self.check_correct_failure_status(&proc_res);
-        self.check_error_patterns(&output_to_check, &proc_res);
     }
 
     fn get_output(&self, proc_res: &ProcRes) -> String {
@@ -789,7 +768,6 @@ actual:\n\
                 }
             }
             RunPass |
-            RunFail |
             Pretty |
             Ui => {
                 // do not use JSON output
