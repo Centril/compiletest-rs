@@ -10,7 +10,7 @@
 
 use common::{Config, TestPaths};
 use common::{CompileFail, ParseFail, Pretty, RunFail, RunPass};
-use common::{Codegen, DebugInfoLldb, DebugInfoGdb, Rustdoc, CodegenUnits};
+use common::{Codegen, DebugInfoLldb, DebugInfoGdb, CodegenUnits};
 use common::{RunMake, Ui};
 use diff;
 use errors::{self, ErrorKind, Error};
@@ -18,7 +18,6 @@ use json;
 use header::TestProps;
 use util::logv;
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env;
 use std::ffi::OsString;
@@ -127,7 +126,6 @@ impl<'test> TestCx<'test> {
             DebugInfoGdb => self.run_debuginfo_gdb_test(),
             DebugInfoLldb => self.run_debuginfo_lldb_test(),
             Codegen => self.run_codegen_test(),
-            Rustdoc => self.run_rustdoc_test(),
             CodegenUnits => self.run_codegen_units_test(),
             RunMake => self.run_rmake_test(),
             Ui => self.run_ui_test(),
@@ -1099,42 +1097,6 @@ actual:\n\
         self.compose_and_run_compiler(rustc, None)
     }
 
-    fn document(&self, out_dir: &Path) -> ProcRes {
-        if self.props.build_aux_docs {
-            for rel_ab in &self.props.aux_builds {
-                let aux_testpaths = self.compute_aux_test_paths(rel_ab);
-                let aux_props = self.props.from_aux_file(&aux_testpaths.file,
-                                                         self.revision,
-                                                         self.config);
-                let aux_cx = TestCx {
-                    config: self.config,
-                    props: &aux_props,
-                    testpaths: &aux_testpaths,
-                    revision: self.revision
-                };
-                let auxres = aux_cx.document(out_dir);
-                if !auxres.status.success() {
-                    return auxres;
-                }
-            }
-        }
-
-        let aux_dir = self.aux_output_dir_name();
-
-        let rustdoc_path = self.config.rustdoc_path.as_ref().expect("--rustdoc-path passed");
-        let mut rustdoc = Command::new(rustdoc_path);
-
-        rustdoc.arg("-L").arg(aux_dir)
-            .arg("-o").arg(out_dir)
-            .arg(&self.testpaths.file)
-            .args(&self.props.compile_flags);
-        if let Some(ref linker) = self.config.linker {
-            rustdoc.arg("--linker").arg(linker).arg("-Z").arg("unstable-options");
-        }
-
-        self.compose_and_run_compiler(rustdoc, None)
-    }
-
     fn exec_compiled_test(&self) -> ProcRes {
         let env = &self.props.exec_env;
 
@@ -1380,7 +1342,6 @@ actual:\n\
             DebugInfoGdb |
             DebugInfoLldb |
             Codegen |
-            Rustdoc |
             RunMake |
             Ui |
             CodegenUnits => {
@@ -1642,138 +1603,6 @@ actual:\n\
             "ISO-8859-1"
         } else {
             "UTF-8"
-        }
-    }
-
-    fn run_rustdoc_test(&self) {
-        assert!(self.revision.is_none(), "revisions not relevant here");
-
-        let out_dir = self.output_base_name();
-        let _ = fs::remove_dir_all(&out_dir);
-        create_dir_all(&out_dir).unwrap();
-
-        let proc_res = self.document(&out_dir);
-        if !proc_res.status.success() {
-            self.fatal_proc_rec("rustdoc failed!", &proc_res);
-        }
-
-        if self.props.check_test_line_numbers_match {
-            self.check_rustdoc_test_option(proc_res);
-        } else {
-            let root = self.config.find_rust_src_root().unwrap();
-            let res = self.cmd2procres(
-                Command::new(&self.config.docck_python)
-                    .arg(root.join("src/etc/htmldocck.py"))
-                    .arg(out_dir)
-                    .arg(&self.testpaths.file),
-            );
-            if !res.status.success() {
-                self.fatal_proc_rec("htmldocck failed!", &res);
-            }
-        }
-    }
-
-    fn get_lines<P: AsRef<Path>>(&self, path: &P,
-                                 mut other_files: Option<&mut Vec<String>>) -> Vec<usize> {
-        let mut file = fs::File::open(path)
-                                .expect("markdown_test_output_check_entry File::open failed");
-        let mut content = String::new();
-        file.read_to_string(&mut content)
-            .expect("markdown_test_output_check_entry read_to_string failed");
-        let mut ignore = false;
-        content.lines()
-               .enumerate()
-               .filter_map(|(line_nb, line)| {
-                   if (line.trim_left().starts_with("pub mod ") ||
-                       line.trim_left().starts_with("mod ")) &&
-                      line.ends_with(';') {
-                       if let Some(ref mut other_files) = other_files {
-                           other_files.push(line.rsplit("mod ")
-                                      .next()
-                                      .unwrap()
-                                      .replace(";", ""));
-                       }
-                       None
-                   } else {
-                       let sline = line.split("///").last().unwrap_or("");
-                       let line = sline.trim_left();
-                       if line.starts_with("```") {
-                           if ignore {
-                               ignore = false;
-                               None
-                           } else {
-                               ignore = true;
-                               Some(line_nb + 1)
-                           }
-                       } else {
-                           None
-                       }
-                   }
-               })
-               .collect()
-    }
-
-    fn check_rustdoc_test_option(&self, res: ProcRes) {
-        let mut other_files = Vec::new();
-        let mut files: HashMap<String, Vec<usize>> = HashMap::new();
-        let cwd = env::current_dir().unwrap();
-        files.insert(self.testpaths.file.strip_prefix(&cwd)
-                                        .unwrap_or(&self.testpaths.file)
-                                        .to_str()
-                                        .unwrap()
-                                        .replace('\\', "/"),
-                     self.get_lines(&self.testpaths.file, Some(&mut other_files)));
-        for other_file in other_files {
-            let mut path = self.testpaths.file.clone();
-            path.set_file_name(&format!("{}.rs", other_file));
-            files.insert(path.strip_prefix(&cwd)
-                             .unwrap_or(&path)
-                             .to_str()
-                             .unwrap()
-                             .replace('\\', "/"),
-                         self.get_lines(&path, None));
-        }
-
-        let mut tested = 0;
-        for _ in res.stdout.split('\n')
-                           .filter(|s| s.starts_with("test "))
-                           .inspect(|s| {
-                               let tmp: Vec<&str> = s.split(" - ").collect();
-                               if tmp.len() == 2 {
-                                   let path = tmp[0].rsplit("test ").next().unwrap();
-                                   if let Some(ref mut v) = files.get_mut(
-                                                                &path.replace('\\', "/")) {
-                                       tested += 1;
-                                       let mut iter = tmp[1].split("(line ");
-                                       iter.next();
-                                       let line = iter.next()
-                                                      .unwrap_or(")")
-                                                      .split(')')
-                                                      .next()
-                                                      .unwrap_or("0")
-                                                      .parse()
-                                                      .unwrap_or(0);
-                                       if let Ok(pos) = v.binary_search(&line) {
-                                           v.remove(pos);
-                                       } else {
-                                           self.fatal_proc_rec(
-                                               &format!("Not found doc test: \"{}\" in \"{}\":{:?}",
-                                                        s, path, v),
-                                               &res);
-                                       }
-                                   }
-                               }
-                           }) {}
-        if tested == 0 {
-            self.fatal_proc_rec(&format!("No test has been found... {:?}", files), &res);
-        } else {
-            for (entry, v) in &files {
-                if !v.is_empty() {
-                    self.fatal_proc_rec(&format!("Not found test at line{} \"{}\":{:?}",
-                                                 if v.len() > 1 { "s" } else { "" }, entry, v),
-                                        &res);
-                }
-            }
         }
     }
 
