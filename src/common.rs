@@ -30,8 +30,7 @@ pub enum Mode {
 impl Mode {
     pub fn disambiguator(self) -> &'static str {
         // Run-pass and pretty run-pass tests could run concurrently, and if they do,
-        // they need to keep their output segregated. Same is true for debuginfo tests that
-        // can be run both on gdb and lldb.
+        // they need to keep their output segregated.
         match self {
             Pretty => ".pretty",
             _ => "",
@@ -121,15 +120,6 @@ pub struct Config {
 
     /// Host triple for the compiler being invoked
     pub host: String,
-
-    /// Path to / name of the GDB executable
-    pub gdb: Option<String>,
-
-    /// Version of GDB, encoded as ((major * 1000) + minor) * 1000 + patch
-    pub gdb_version: Option<u32>,
-
-    /// Whether GDB has native rust support
-    pub gdb_native_rust: bool,
 
     /// Version of LLVM
     pub llvm_version: Option<String>,
@@ -295,9 +285,6 @@ impl Default for Config {
             host: platform.clone(),
             #[cfg(feature = "norustc")]
             host: env!("HOST").to_string(),
-            gdb: None,
-            gdb_version: None,
-            gdb_native_rust: false,
             llvm_version: None,
             system_llvm: false,
             android_cross_path: PathBuf::from("android-cross-path"),
