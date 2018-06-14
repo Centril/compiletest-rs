@@ -36,7 +36,6 @@ pub enum Mode {
     Incremental,
     RunMake,
     Ui,
-    MirOpt,
 }
 
 impl Mode {
@@ -68,10 +67,8 @@ impl FromStr for Mode {
             "codegen" => Ok(Codegen),
             "rustdoc" => Ok(Rustdoc),
             "codegen-units" => Ok(CodegenUnits),
-            "incremental" => Ok(Incremental),
             "run-make" => Ok(RunMake),
             "ui" => Ok(Ui),
-            "mir-opt" => Ok(MirOpt),
             _ => Err(()),
         }
     }
@@ -94,7 +91,6 @@ impl fmt::Display for Mode {
                               Incremental => "incremental",
                               RunMake => "run-make",
                               Ui => "ui",
-                              MirOpt => "mir-opt",
                           },
                           f)
     }
