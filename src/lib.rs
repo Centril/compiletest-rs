@@ -8,11 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![crate_type = "lib"]
-
 #![cfg_attr(not(feature = "norustc"), feature(rustc_private))]
 #![cfg_attr(not(feature = "stable"), feature(test))]
-#![cfg_attr(not(feature = "stable"), feature(slice_rotate))]
 
 #![forbid(unused_imports)]
 #![forbid(non_snake_case)]
@@ -126,10 +123,8 @@ fn collect_tests_from_dir(config: &Config,
                           -> io::Result<()> {
     // Ignore directories that contain a file
     // `compiletest-ignore-dir`.
-    for file in try!(fs::read_dir(dir)) {
-        let file = try!(file);
-        let name = file.file_name();
-        if name == *"compiletest-ignore-dir" {
+    for file in fs::read_dir(dir)? {
+        if file?.file_name() == *"compiletest-ignore-dir" {
             return Ok(());
         }
     }
@@ -145,9 +140,8 @@ fn collect_tests_from_dir(config: &Config,
 
     // Add each `.rs` file as a test, and recurse further on any
     // subdirectories we find, except for `aux` directories.
-    let dirs = try!(fs::read_dir(dir));
-    for file in dirs {
-        let file = try!(file);
+    for file in fs::read_dir(dir)? {
+        let file = file?;
         let file_path = file.path();
         let file_name = file.file_name();
         if is_test(&file_name) {
@@ -178,11 +172,11 @@ fn collect_tests_from_dir(config: &Config,
                 fs::create_dir_all(&build_dir).unwrap();
             } else {
                 debug!("found directory: {:?}", file_path.display());
-                try!(collect_tests_from_dir(config,
+                collect_tests_from_dir(config,
                                        base,
                                        &file_path,
                                        &relative_file_path,
-                                       tests));
+                                       tests)?;
             }
         } else {
             debug!("found other file/directory: {:?}", file_path.display());
