@@ -749,12 +749,6 @@ actual:\n\
             rustc.args(&["--cfg", revision]);
         }
 
-        if let Some(ref incremental_dir) = self.props.incremental_dir {
-            rustc.args(&["-Z", &format!("incremental={}", incremental_dir.display())]);
-            rustc.args(&["-Z", "incremental-verify-ich"]);
-            rustc.args(&["-Z", "incremental-queries"]);
-        }
-
         match self.config.mode {
             CompileFail => {
                 // If we are extracting and matching errors in the new

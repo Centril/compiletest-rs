@@ -121,11 +121,6 @@ pub struct TestProps {
     pub forbid_output: Vec<String>,
     // Revisions to test for incremental compilation.
     pub revisions: Vec<String>,
-    // Directory (if any) to use for incremental compilation.  This is
-    // not set by end-users; rather it is set by the incremental
-    // testing harness and used when generating compilation
-    // arguments. (In particular, it propagates to the aux-builds.)
-    pub incremental_dir: Option<PathBuf>,
     // Specifies that a cfail test must actually compile without errors.
     pub must_compile_successfully: bool,
     // rustdoc will test the output of the `--test` option
@@ -158,7 +153,6 @@ impl TestProps {
             pretty_mode: "normal".to_string(),
             pretty_compare_only: false,
             forbid_output: vec![],
-            incremental_dir: None,
             must_compile_successfully: false,
             check_test_line_numbers_match: false,
             run_pass: false,
@@ -175,7 +169,6 @@ impl TestProps {
         let mut props = TestProps::new();
 
         // copy over select properties to the aux build:
-        props.incremental_dir = self.incremental_dir.clone();
         props.load_from(testfile, cfg, config);
 
         props
