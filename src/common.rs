@@ -32,7 +32,6 @@ pub enum Mode {
     Codegen,
     Rustdoc,
     CodegenUnits,
-    Incremental,
     RunMake,
     Ui,
 }
@@ -85,7 +84,6 @@ impl fmt::Display for Mode {
                               Codegen => "codegen",
                               Rustdoc => "rustdoc",
                               CodegenUnits => "codegen-units",
-                              Incremental => "incremental",
                               RunMake => "run-make",
                               Ui => "ui",
                           },

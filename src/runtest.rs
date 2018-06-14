@@ -11,7 +11,7 @@
 use common::{Config, TestPaths};
 use common::{CompileFail, ParseFail, Pretty, RunFail, RunPass};
 use common::{Codegen, DebugInfoLldb, DebugInfoGdb, Rustdoc, CodegenUnits};
-use common::{Incremental, RunMake, Ui};
+use common::{RunMake, Ui};
 use diff;
 use errors::{self, ErrorKind, Error};
 use json;
@@ -113,9 +113,6 @@ impl<'test> TestCx<'test> {
     /// invoked once before any revisions have been processed
     fn init_all(&self) {
         assert!(self.revision.is_none(), "init_all invoked for a revision");
-        if let Incremental = self.config.mode {
-            self.init_incremental_test()
-        }
     }
 
     /// Code executed for each revision in turn (or, if there are no
@@ -132,10 +129,8 @@ impl<'test> TestCx<'test> {
             Codegen => self.run_codegen_test(),
             Rustdoc => self.run_rustdoc_test(),
             CodegenUnits => self.run_codegen_units_test(),
-            Incremental => self.run_incremental_test(),
             RunMake => self.run_rmake_test(),
             Ui => self.run_ui_test(),
-
         }
     }
 
@@ -1371,8 +1366,7 @@ actual:\n\
 
         match self.config.mode {
             CompileFail |
-            ParseFail |
-            Incremental => {
+            ParseFail => {
                 // If we are extracting and matching errors in the new
                 // fashion, then you want JSON mode. Old-skool error
                 // patterns still match the raw compiler output.
@@ -1596,48 +1590,8 @@ actual:\n\
     }
 
     fn fatal_proc_rec(&self, err: &str, proc_res: &ProcRes) -> ! {
-        self.try_print_open_handles();
         self.error(err);
         proc_res.fatal(None);
-    }
-
-    // This function is a poor man's attempt to debug rust-lang/rust#38620, if
-    // that's closed then this should be deleted
-    //
-    // This is a very "opportunistic" debugging attempt, so we ignore all
-    // errors here.
-    fn try_print_open_handles(&self) {
-        if !cfg!(windows) {
-            return
-        }
-        if self.config.mode != Incremental {
-            return
-        }
-
-        let filename = match self.testpaths.file.file_stem() {
-            Some(path) => path,
-            None => return,
-        };
-
-        let mut cmd = Command::new("handle.exe");
-        cmd.arg("-a").arg("-u");
-        cmd.arg(filename);
-        cmd.arg("-nobanner");
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
-        let output = match cmd.spawn().and_then(read2_abbreviated) {
-            Ok(output) => output,
-            Err(_) => return,
-        };
-        println!("---------------------------------------------------");
-        println!("ran extra command to debug rust-lang/rust#38620: ");
-        println!("{:?}", cmd);
-        println!("result: {}", output.status);
-        println!("--- stdout ----------------------------------------");
-        println!("{}", String::from_utf8_lossy(&output.stdout));
-        println!("--- stderr ----------------------------------------");
-        println!("{}", String::from_utf8_lossy(&output.stderr));
-        println!("---------------------------------------------------");
     }
 
     // codegen tests (using FileCheck)
@@ -1975,85 +1929,6 @@ actual:\n\
 
             string
         }
-    }
-
-    fn init_incremental_test(&self) {
-        // (See `run_incremental_test` for an overview of how incremental tests work.)
-
-        // Before any of the revisions have executed, create the
-        // incremental workproduct directory.  Delete any old
-        // incremental work products that may be there from prior
-        // runs.
-        let incremental_dir = self.incremental_dir();
-        if incremental_dir.exists() {
-            // Canonicalizing the path will convert it to the //?/ format
-            // on Windows, which enables paths longer than 260 character
-            let canonicalized = incremental_dir.canonicalize().unwrap();
-            fs::remove_dir_all(canonicalized).unwrap();
-        }
-        fs::create_dir_all(&incremental_dir).unwrap();
-
-        if self.config.verbose {
-            print!("init_incremental_test: incremental_dir={}", incremental_dir.display());
-        }
-    }
-
-    fn run_incremental_test(&self) {
-        // Basic plan for a test incremental/foo/bar.rs:
-        // - load list of revisions rpass1, cfail2, rpass3
-        //   - each should begin with `rpass`, `cfail`, or `cfail`
-        //   - if `rpass`, expect compile and execution to succeed
-        //   - if `cfail`, expect compilation to fail
-        //   - if `rfail`, expect execution to fail
-        // - create a directory build/foo/bar.incremental
-        // - compile foo/bar.rs with -Z incremental=.../foo/bar.incremental and -C rpass1
-        //   - because name of revision starts with "rpass", expect success
-        // - compile foo/bar.rs with -Z incremental=.../foo/bar.incremental and -C cfail2
-        //   - because name of revision starts with "cfail", expect an error
-        //   - load expected errors as usual, but filter for those that end in `[rfail2]`
-        // - compile foo/bar.rs with -Z incremental=.../foo/bar.incremental and -C rpass3
-        //   - because name of revision starts with "rpass", expect success
-        // - execute build/foo/bar.exe and save output
-        //
-        // FIXME -- use non-incremental mode as an oracle? That doesn't apply
-        // to #[rustc_dirty] and clean tests I guess
-
-        let revision = self.revision.expect("incremental tests require a list of revisions");
-
-        // Incremental workproduct directory should have already been created.
-        let incremental_dir = self.incremental_dir();
-        assert!(incremental_dir.exists(), "init_incremental_test failed to create incremental dir");
-
-        // Add an extra flag pointing at the incremental directory.
-        let mut revision_props = self.props.clone();
-        revision_props.incremental_dir = Some(incremental_dir);
-
-        let revision_cx = TestCx {
-            config: self.config,
-            props: &revision_props,
-            testpaths: self.testpaths,
-            revision: self.revision,
-        };
-
-        if self.config.verbose {
-            print!("revision={:?} revision_props={:#?}", revision, revision_props);
-        }
-
-        if revision.starts_with("rpass") {
-            revision_cx.run_rpass_test();
-        } else if revision.starts_with("rfail") {
-            revision_cx.run_rfail_test();
-        } else if revision.starts_with("cfail") {
-            revision_cx.run_cfail_test();
-        } else {
-            revision_cx.fatal(
-                "revision name must begin with rpass, rfail, or cfail");
-        }
-    }
-
-    /// Directory where incremental work products are stored.
-    fn incremental_dir(&self) -> PathBuf {
-        self.output_base_name().with_extension("inc")
     }
 
     fn run_rmake_test(&self) {
