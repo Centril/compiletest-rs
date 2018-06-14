@@ -26,7 +26,6 @@ pub enum Mode {
     RunFail,
     RunPass,
     Pretty,
-    RunMake,
     Ui,
 }
 
@@ -50,7 +49,6 @@ impl FromStr for Mode {
             "run-fail" => Ok(RunFail),
             "run-pass" => Ok(RunPass),
             "pretty" => Ok(Pretty),
-            "run-make" => Ok(RunMake),
             "ui" => Ok(Ui),
             _ => Err(()),
         }
@@ -64,7 +62,6 @@ impl fmt::Display for Mode {
                               RunFail => "run-fail",
                               RunPass => "run-pass",
                               Pretty => "pretty",
-                              RunMake => "run-make",
                               Ui => "ui",
                           },
                           f)

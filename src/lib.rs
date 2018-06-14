@@ -43,8 +43,7 @@ use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use common::{Mode, TestPaths};
-use common::Pretty;
+use common::{TestPaths, Pretty};
 
 use self::header::EarlyProps;
 
@@ -133,15 +132,6 @@ fn collect_tests_from_dir(config: &Config,
         let name = file.file_name();
         if name == *"compiletest-ignore-dir" {
             return Ok(());
-        }
-        if name == *"Makefile" && config.mode == Mode::RunMake {
-            let paths = TestPaths {
-                file: dir.to_path_buf(),
-                base: base.to_path_buf(),
-                relative_dir: relative_dir_path.parent().unwrap().to_path_buf(),
-            };
-            tests.push(make_test(config, &paths));
-            return Ok(())
         }
     }
 

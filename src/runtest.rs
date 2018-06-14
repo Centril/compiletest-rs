@@ -10,7 +10,7 @@
 
 use common::{Config, TestPaths};
 use common::{CompileFail, Pretty, RunFail, RunPass};
-use common::{RunMake, Ui};
+use common::Ui;
 use diff;
 use errors::{self, ErrorKind, Error};
 use json;
@@ -107,7 +107,6 @@ impl<'test> TestCx<'test> {
             RunFail => self.run_rfail_test(),
             RunPass => self.run_rpass_test(),
             Pretty => self.run_pretty_test(),
-            RunMake => self.run_rmake_test(),
             Ui => self.run_ui_test(),
         }
     }
@@ -792,7 +791,6 @@ actual:\n\
             RunPass |
             RunFail |
             Pretty |
-            RunMake |
             Ui => {
                 // do not use JSON output
             }
@@ -1005,120 +1003,6 @@ actual:\n\
     }
 
     // codegen tests (using FileCheck)
-
-    fn run_rmake_test(&self) {
-        // FIXME(#11094): we should fix these tests
-        if self.config.host != self.config.target {
-            return
-        }
-
-        let cwd = env::current_dir().unwrap();
-        let src_root = self.config.src_base.parent().unwrap()
-                                           .parent().unwrap()
-                                           .parent().unwrap();
-        let src_root = cwd.join(&src_root);
-
-        let tmpdir = cwd.join(self.output_base_name());
-        if tmpdir.exists() {
-            self.aggressive_rm_rf(&tmpdir).unwrap();
-        }
-        create_dir_all(&tmpdir).unwrap();
-
-        let host = &self.config.host;
-        let make = if host.contains("bitrig") || host.contains("dragonfly") ||
-            host.contains("freebsd") || host.contains("netbsd") ||
-            host.contains("openbsd") {
-            "gmake"
-        } else {
-            "make"
-        };
-
-        let mut cmd = Command::new(make);
-        cmd.current_dir(&self.testpaths.file)
-           .stdout(Stdio::piped())
-           .stderr(Stdio::piped())
-           .env("TARGET", &self.config.target)
-           .env("PYTHON", &self.config.docck_python)
-           .env("S", src_root)
-           .env("RUST_BUILD_STAGE", &self.config.stage_id)
-           .env("RUSTC", cwd.join(&self.config.rustc_path))
-           .env("RUSTDOC",
-               cwd.join(&self.config.rustdoc_path.as_ref().expect("--rustdoc-path passed")))
-           .env("TMPDIR", &tmpdir)
-           .env("LD_LIB_PATH_ENVVAR", dylib_env_var())
-           .env("HOST_RPATH_DIR", cwd.join(&self.config.compile_lib_path))
-           .env("TARGET_RPATH_DIR", cwd.join(&self.config.run_lib_path))
-           .env("LLVM_COMPONENTS", &self.config.llvm_components)
-           .env("LLVM_CXXFLAGS", &self.config.llvm_cxxflags);
-
-        if let Some(ref linker) = self.config.linker {
-            cmd.env("RUSTC_LINKER", linker);
-        }
-
-        // We don't want RUSTFLAGS set from the outside to interfere with
-        // compiler flags set in the test cases:
-        cmd.env_remove("RUSTFLAGS");
-
-        if self.config.target.contains("msvc") {
-            // We need to pass a path to `lib.exe`, so assume that `cc` is `cl.exe`
-            // and that `lib.exe` lives next to it.
-            let lib = Path::new(&self.config.cc).parent().unwrap().join("lib.exe");
-
-            // MSYS doesn't like passing flags of the form `/foo` as it thinks it's
-            // a path and instead passes `C:\msys64\foo`, so convert all
-            // `/`-arguments to MSVC here to `-` arguments.
-            let cflags = self.config.cflags.split(' ').map(|s| s.replace("/", "-"))
-                                                 .collect::<Vec<_>>().join(" ");
-
-            cmd.env("IS_MSVC", "1")
-               .env("IS_WINDOWS", "1")
-               .env("MSVC_LIB", format!("'{}' -nologo", lib.display()))
-               .env("CC", format!("'{}' {}", self.config.cc, cflags))
-               .env("CXX", &self.config.cxx);
-        } else {
-            cmd.env("CC", format!("{} {}", self.config.cc, self.config.cflags))
-               .env("CXX", format!("{} {}", self.config.cxx, self.config.cflags))
-               .env("AR", &self.config.ar);
-
-            if self.config.target.contains("windows") {
-                cmd.env("IS_WINDOWS", "1");
-            }
-        }
-
-        let output = cmd.spawn().and_then(read2_abbreviated).expect("failed to spawn `make`");
-        if !output.status.success() {
-            let res = ProcRes {
-                status: output.status,
-                stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-                stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
-                cmdline: format!("{:?}", cmd),
-            };
-            self.fatal_proc_rec("make failed", &res);
-        }
-    }
-
-    fn aggressive_rm_rf(&self, path: &Path) -> io::Result<()> {
-        for e in path.read_dir()? {
-            let entry = e?;
-            let path = entry.path();
-            if entry.file_type()?.is_dir() {
-                self.aggressive_rm_rf(&path)?;
-            } else {
-                // Remove readonly files as well on windows (by default we can't)
-                fs::remove_file(&path).or_else(|e| {
-                    if cfg!(windows) && e.kind() == io::ErrorKind::PermissionDenied {
-                        let mut meta = entry.metadata()?.permissions();
-                        meta.set_readonly(false);
-                        fs::set_permissions(&path, meta)?;
-                        fs::remove_file(&path)
-                    } else {
-                        Err(e)
-                    }
-                })?;
-            }
-        }
-        fs::remove_dir(path)
-    }
 
     fn run_ui_test(&self) {
         let proc_res = self.compile_test();
