@@ -25,7 +25,6 @@ pub enum Mode {
     CompileFail,
     RunPass,
     Pretty,
-    Ui,
 }
 
 impl Mode {
@@ -47,7 +46,6 @@ impl FromStr for Mode {
             "compile-fail" => Ok(CompileFail),
             "run-pass" => Ok(RunPass),
             "pretty" => Ok(Pretty),
-            "ui" => Ok(Ui),
             _ => Err(()),
         }
     }
@@ -59,7 +57,6 @@ impl fmt::Display for Mode {
                               CompileFail => "compile-fail",
                               RunPass => "run-pass",
                               Pretty => "pretty",
-                              Ui => "ui",
                           },
                           f)
     }

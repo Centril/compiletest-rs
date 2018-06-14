@@ -10,8 +10,6 @@
 
 use common::{Config, TestPaths};
 use common::{CompileFail, Pretty, RunPass};
-use common::Ui;
-use diff;
 use errors::{self, ErrorKind, Error};
 use json;
 use header::TestProps;
@@ -106,7 +104,6 @@ impl<'test> TestCx<'test> {
             CompileFail => self.run_cfail_test(),
             RunPass => self.run_rpass_test(),
             Pretty => self.run_pretty_test(),
-            Ui => self.run_ui_test(),
         }
     }
 
@@ -515,7 +512,7 @@ actual:\n\
         rustc.arg("-L").arg(&self.aux_output_dir_name());
 
         match self.config.mode {
-            CompileFail | Ui => {
+            CompileFail => {
                 // compile-fail and ui tests tend to have tons of unused code as
                 // it's just testing various pieces of the compile, but we don't
                 // want to actually assert warnings about all this code. Instead
@@ -768,8 +765,7 @@ actual:\n\
                 }
             }
             RunPass |
-            Pretty |
-            Ui => {
+            Pretty => {
                 // do not use JSON output
             }
         }
@@ -978,133 +974,6 @@ actual:\n\
     fn fatal_proc_rec(&self, err: &str, proc_res: &ProcRes) -> ! {
         self.error(err);
         proc_res.fatal(None);
-    }
-
-    // codegen tests (using FileCheck)
-
-    fn run_ui_test(&self) {
-        let proc_res = self.compile_test();
-
-        let expected_stderr_path = self.expected_output_path("stderr");
-        let expected_stderr = self.load_expected_output(&expected_stderr_path);
-
-        let expected_stdout_path = self.expected_output_path("stdout");
-        let expected_stdout = self.load_expected_output(&expected_stdout_path);
-
-        let normalized_stdout =
-            self.normalize_output(&proc_res.stdout, &self.props.normalize_stdout);
-        let normalized_stderr =
-            self.normalize_output(&proc_res.stderr, &self.props.normalize_stderr);
-
-        let mut errors = 0;
-        errors += self.compare_output("stdout", &normalized_stdout, &expected_stdout);
-        errors += self.compare_output("stderr", &normalized_stderr, &expected_stderr);
-
-        if errors > 0 {
-            println!("To update references, run this command from build directory:");
-            let relative_path_to_file =
-                self.testpaths.relative_dir
-                              .join(self.testpaths.file.file_name().unwrap());
-            println!("{}/update-references.sh '{}' '{}'",
-                     self.config.src_base.display(),
-                     self.config.build_base.display(),
-                     relative_path_to_file.display());
-            self.fatal_proc_rec(&format!("{} errors occurred comparing output.", errors),
-                                &proc_res);
-        }
-
-        if self.props.run_pass {
-            let proc_res = self.exec_compiled_test();
-
-            if !proc_res.status.success() {
-                self.fatal_proc_rec("test run failed!", &proc_res);
-            }
-        }
-    }
-
-    fn normalize_output(&self, output: &str, custom_rules: &[(String, String)]) -> String {
-        let parent_dir = self.testpaths.file.parent().unwrap();
-        let cflags = self.props.compile_flags.join(" ");
-        let json = cflags.contains("--error-format json") ||
-                   cflags.contains("--error-format pretty-json");
-        let parent_dir_str = if json {
-            parent_dir.display().to_string().replace("\\", "\\\\")
-        } else {
-            parent_dir.display().to_string()
-        };
-
-        let mut normalized = output.replace(&parent_dir_str, "$DIR");
-
-        if json {
-            // escaped newlines in json strings should be readable
-            // in the stderr files. There's no point int being correct,
-            // since only humans process the stderr files.
-            // Thus we just turn escaped newlines back into newlines.
-            normalized = normalized.replace("\\n", "\n");
-        }
-
-        normalized = normalized.replace("\\\\", "\\") // denormalize for paths on windows
-              .replace("\\", "/") // normalize for paths on windows
-              .replace("\r\n", "\n") // normalize for linebreaks on windows
-              .replace("\t", "\\t"); // makes tabs visible
-        for rule in custom_rules {
-            normalized = normalized.replace(&rule.0, &rule.1);
-        }
-        normalized
-    }
-
-    fn expected_output_path(&self, kind: &str) -> PathBuf {
-        let extension = match self.revision {
-            Some(r) => format!("{}.{}", r, kind),
-            None => kind.to_string(),
-        };
-        self.testpaths.file.with_extension(extension)
-    }
-
-    fn load_expected_output(&self, path: &Path) -> String {
-        if !path.exists() {
-            return String::new();
-        }
-
-        let mut result = String::new();
-        match File::open(path).and_then(|mut f| f.read_to_string(&mut result)) {
-            Ok(_) => result,
-            Err(e) => {
-                self.fatal(&format!("failed to load expected output from `{}`: {}",
-                                    path.display(), e))
-            }
-        }
-    }
-
-    fn compare_output(&self, kind: &str, actual: &str, expected: &str) -> usize {
-        if actual == expected {
-            return 0;
-        }
-
-        println!("normalized {}:\n{}\n", kind, actual);
-        println!("expected {}:\n{}\n", kind, expected);
-        println!("diff of {}:\n", kind);
-
-        for diff in diff::lines(expected, actual) {
-            match diff {
-                diff::Result::Left(l)    => println!("-{}", l),
-                diff::Result::Both(l, _) => println!(" {}", l),
-                diff::Result::Right(r)   => println!("+{}", r),
-            }
-        }
-
-        let output_file = self.output_base_name().with_extension(kind);
-        match File::create(&output_file).and_then(|mut f| f.write_all(actual.as_bytes())) {
-            Ok(()) => { }
-            Err(e) => {
-                self.fatal(&format!("failed to write {} to `{}`: {}",
-                                    kind, output_file.display(), e))
-            }
-        }
-
-        println!("\nThe actual {0} differed from the expected {0}.", kind);
-        println!("Actual {} saved to {}", kind, output_file.display());
-        1
     }
 }
 

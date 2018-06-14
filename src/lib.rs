@@ -33,7 +33,6 @@ extern crate test;
 #[macro_use]
 extern crate log;
 extern crate filetime;
-extern crate diff;
 extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
