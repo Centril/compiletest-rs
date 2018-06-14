@@ -18,8 +18,6 @@ use common::Config;
 use common;
 use util;
 
-use extract_gdb_version;
-
 /// Properties which must be known very early, before actually running
 /// the test.
 pub struct EarlyProps {
@@ -42,7 +40,6 @@ impl EarlyProps {
             props.ignore =
                 props.ignore ||
                 config.parse_cfg_name_directive(ln, "ignore") ||
-                ignore_gdb(config, ln) ||
                 ignore_llvm(config, ln);
 
             if let Some(s) = config.parse_aux_build(ln) {
@@ -53,66 +50,6 @@ impl EarlyProps {
         });
 
         return props;
-
-        fn ignore_gdb(config: &Config, line: &str) -> bool {
-            if config.mode != common::DebugInfoGdb {
-                return false;
-            }
-
-            if let Some(actual_version) = config.gdb_version {
-                if line.starts_with("min-gdb-version") {
-                    let (start_ver, end_ver) = extract_gdb_version_range(line);
-
-                    if start_ver != end_ver {
-                        panic!("Expected single GDB version")
-                    }
-                    // Ignore if actual version is smaller the minimum required
-                    // version
-                    actual_version < start_ver
-                } else if line.starts_with("ignore-gdb-version") {
-                    let (min_version, max_version) = extract_gdb_version_range(line);
-
-                    if max_version < min_version {
-                        panic!("Malformed GDB version range: max < min")
-                    }
-
-                    actual_version >= min_version && actual_version <= max_version
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        }
-
-        // Takes a directive of the form "ignore-gdb-version <version1> [- <version2>]",
-        // returns the numeric representation of <version1> and <version2> as
-        // tuple: (<version1> as u32, <version2> as u32)
-        // If the <version2> part is omitted, the second component of the tuple
-        // is the same as <version1>.
-        fn extract_gdb_version_range(line: &str) -> (u32, u32) {
-            const ERROR_MESSAGE: &'static str = "Malformed GDB version directive";
-
-            let range_components = line.split(&[' ', '-'][..])
-                                       .filter(|word| !word.is_empty())
-                                       .map(extract_gdb_version)
-                                       .skip_while(Option::is_none)
-                                       .take(3) // 3 or more = invalid, so take at most 3.
-                                       .collect::<Vec<Option<u32>>>();
-
-            match range_components.len() {
-                1 => {
-                    let v = range_components[0].unwrap();
-                    (v, v)
-                }
-                2 => {
-                    let v_min = range_components[0].unwrap();
-                    let v_max = range_components[1].expect(ERROR_MESSAGE);
-                    (v_min, v_max)
-                }
-                _ => panic!(ERROR_MESSAGE),
-            }
-        }
 
         fn ignore_llvm(config: &Config, line: &str) -> bool {
             if config.system_llvm && line.starts_with("no-system-llvm") {
@@ -522,7 +459,6 @@ impl Config {
                 name == self.stage_id.split('-').next().unwrap() || // stage
                 Some(name) == util::get_env(&self.target) ||        // env
                 match self.mode {
-                    common::DebugInfoGdb => name == "gdb",
                     common::Pretty => name == "pretty",
                     _ => false,
                 } ||

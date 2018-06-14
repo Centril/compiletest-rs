@@ -44,7 +44,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use common::{Mode, TestPaths};
-use common::{Pretty, DebugInfoGdb};
+use common::Pretty;
 
 use self::header::EarlyProps;
 
@@ -61,11 +61,6 @@ pub use common::Config;
 
 pub fn run_tests(config: &Config) {
     if config.target.contains("android") {
-        if let DebugInfoGdb = config.mode {
-            println!("{} debug-info test uses tcp 5039 port.\
-                     please reserve it", config.target);
-        }
-
         // android debug-info test uses remote debugger
         // so, we test 1 thread at once.
         // also trying to isolate problems with adb_run_wrapper.sh ilooping
@@ -274,69 +269,6 @@ pub fn make_test_closure(config: &Config, testpaths: &TestPaths) -> test::TestFn
         let config = config.clone();  // FIXME: why is this needed?
         runtest::run(config, &testpaths)
     }))
-}
-
-fn extract_gdb_version(full_version_line: &str) -> Option<u32> {
-    let full_version_line = full_version_line.trim();
-
-    // GDB versions look like this: "major.minor.patch?.yyyymmdd?", with both
-    // of the ? sections being optional
-
-    // We will parse up to 3 digits for minor and patch, ignoring the date
-    // We limit major to 1 digit, otherwise, on openSUSE, we parse the openSUSE version
-
-    // don't start parsing in the middle of a number
-    let mut prev_was_digit = false;
-    for (pos, c) in full_version_line.char_indices() {
-        if prev_was_digit || !c.is_digit(10) {
-            prev_was_digit = c.is_digit(10);
-            continue
-        }
-
-        prev_was_digit = true;
-
-        let line = &full_version_line[pos..];
-
-        let next_split = match line.find(|c: char| !c.is_digit(10)) {
-            Some(idx) => idx,
-            None => continue, // no minor version
-        };
-
-        if line.as_bytes()[next_split] != b'.' {
-            continue; // no minor version
-        }
-
-        let major = &line[..next_split];
-        let line = &line[next_split + 1..];
-
-        let (minor, patch) = match line.find(|c: char| !c.is_digit(10)) {
-            Some(idx) => if line.as_bytes()[idx] == b'.' {
-                let patch = &line[idx + 1..];
-
-                let patch_len = patch.find(|c: char| !c.is_digit(10))
-                                                       .unwrap_or_else(|| patch.len());
-                let patch = &patch[..patch_len];
-                let patch = if patch_len > 3 || patch_len == 0 { None } else { Some(patch) };
-
-                (&line[..idx], patch)
-            } else {
-                (&line[..idx], None)
-            },
-            None => (line, None),
-        };
-
-        if major.len() != 1 || minor.is_empty() {
-            continue;
-        }
-
-        let major: u32 = major.parse().unwrap();
-        let minor: u32 = minor.parse().unwrap();
-        let patch: u32 = patch.unwrap_or("0").parse().unwrap();
-
-        return Some(((major * 1000) + minor) * 1000 + patch);
-    }
-
-    None
 }
 
 #[allow(dead_code)]

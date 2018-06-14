@@ -27,7 +27,6 @@ pub enum Mode {
     RunFail,
     RunPass,
     Pretty,
-    DebugInfoGdb,
     RunMake,
     Ui,
 }
@@ -39,7 +38,6 @@ impl Mode {
         // can be run both on gdb and lldb.
         match self {
             Pretty => ".pretty",
-            DebugInfoGdb => ".gdb",
             _ => "",
         }
     }
@@ -54,7 +52,6 @@ impl FromStr for Mode {
             "run-fail" => Ok(RunFail),
             "run-pass" => Ok(RunPass),
             "pretty" => Ok(Pretty),
-            "debuginfo-gdb" => Ok(DebugInfoGdb),
             "run-make" => Ok(RunMake),
             "ui" => Ok(Ui),
             _ => Err(()),
@@ -70,7 +67,6 @@ impl fmt::Display for Mode {
                               RunFail => "run-fail",
                               RunPass => "run-pass",
                               Pretty => "pretty",
-                              DebugInfoGdb => "debuginfo-gdb",
                               RunMake => "run-make",
                               Ui => "ui",
                           },
