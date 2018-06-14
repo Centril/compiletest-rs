@@ -14,11 +14,11 @@
 #![cfg_attr(not(feature = "stable"), feature(test))]
 #![cfg_attr(not(feature = "stable"), feature(slice_rotate))]
 
-#![deny(unused_imports)]
-#![deny(non_snake_case)]
-#![deny(unused_variables)]
-#![deny(unreachable_patterns)]
-#![deny(dead_code)]
+#![forbid(unused_imports)]
+#![forbid(non_snake_case)]
+#![forbid(unused_variables)]
+#![forbid(unreachable_patterns)]
+#![forbid(dead_code)]
 
 
 #[cfg(not(feature = "norustc"))]
@@ -258,50 +258,4 @@ pub fn make_test_closure(config: &Config, testpaths: &TestPaths) -> test::TestFn
         let config = config.clone();  // FIXME: why is this needed?
         runtest::run(config, &testpaths)
     }))
-}
-
-#[allow(dead_code)]
-fn extract_lldb_version(full_version_line: Option<String>) -> Option<String> {
-    // Extract the major LLDB version from the given version string.
-    // LLDB version strings are different for Apple and non-Apple platforms.
-    // At the moment, this function only supports the Apple variant, which looks
-    // like this:
-    //
-    // LLDB-179.5 (older versions)
-    // lldb-300.2.51 (new versions)
-    //
-    // We are only interested in the major version number, so this function
-    // will return `Some("179")` and `Some("300")` respectively.
-
-    if let Some(ref full_version_line) = full_version_line {
-        if !full_version_line.trim().is_empty() {
-            let full_version_line = full_version_line.trim();
-
-            for (pos, l) in full_version_line.char_indices() {
-                if l != 'l' && l != 'L' { continue }
-                if pos + 5 >= full_version_line.len() { continue }
-                let l = full_version_line[pos + 1..].chars().next().unwrap();
-                if l != 'l' && l != 'L' { continue }
-                let d = full_version_line[pos + 2..].chars().next().unwrap();
-                if d != 'd' && d != 'D' { continue }
-                let b = full_version_line[pos + 3..].chars().next().unwrap();
-                if b != 'b' && b != 'B' { continue }
-                let dash = full_version_line[pos + 4..].chars().next().unwrap();
-                if dash != '-' { continue }
-
-                let vers = full_version_line[pos + 5..].chars().take_while(|c| {
-                    c.is_digit(10)
-                }).collect::<String>();
-                if !vers.is_empty() { return Some(vers) }
-            }
-            println!("Could not extract LLDB version from line '{}'",
-                     full_version_line);
-        }
-    }
-    None
-}
-
-#[allow(dead_code)]
-fn is_blacklisted_lldb_version(version: &str) -> bool {
-    version == "350"
 }
