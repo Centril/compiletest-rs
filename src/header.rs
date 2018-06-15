@@ -90,9 +90,6 @@ pub struct TestProps {
     pub compile_flags: Vec<String>,
     // Extra flags to pass when the compiled code is run (such as --bench)
     pub run_flags: Option<String>,
-    // If present, the name of a file that this test should match when
-    // pretty-printed
-    pub pp_exact: Option<PathBuf>,
     // Other crates that should be compiled (typically from the same
     // directory as the test, but for backwards compatibility reasons
     // we also check the auxiliary directory)
@@ -134,7 +131,6 @@ impl TestProps {
             error_patterns: vec![],
             compile_flags: vec![],
             run_flags: None,
-            pp_exact: None,
             aux_builds: vec![],
             revisions: vec![],
             rustc_env: vec![],
@@ -199,10 +195,6 @@ impl TestProps {
 
             if self.run_flags.is_none() {
                 self.run_flags = config.parse_run_flags(ln);
-            }
-
-            if self.pp_exact.is_none() {
-                self.pp_exact = config.parse_pp_exact(ln, testfile);
             }
 
             if !self.build_aux_docs {
@@ -388,16 +380,6 @@ impl Config {
                 n => panic!("Expected 1 or 2 strings, not {}", n),
             }
         })
-    }
-
-    fn parse_pp_exact(&self, line: &str, testfile: &Path) -> Option<PathBuf> {
-        if let Some(s) = self.parse_name_value_directive(line, "pp-exact") {
-            Some(PathBuf::from(&s))
-        } else if self.parse_name_directive(line, "pp-exact") {
-            testfile.file_name().map(PathBuf::from)
-        } else {
-            None
-        }
     }
 
     fn parse_custom_normalization(&self, mut line: &str, prefix: &str) -> Option<(String, String)> {

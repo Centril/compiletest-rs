@@ -191,52 +191,32 @@ impl<'test> TestCx<'test> {
 
     #[cfg(not(feature = "stable"))]
     fn run_pretty_test(&self) {
-        if self.props.pp_exact.is_some() {
-            logv(self.config, "testing for exact pretty-printing".to_owned());
-        } else {
-            logv(self.config, "testing for converging pretty-printing".to_owned());
-        }
-
-        let rounds = match self.props.pp_exact { Some(_) => 1, None => 2 };
+        logv(self.config, "testing for exact pretty-printing".to_owned());
 
         let mut src = String::new();
         File::open(&self.testpaths.file).unwrap().read_to_string(&mut src).unwrap();
-        let mut srcs = vec![src];
 
-        let mut round = 0;
-        while round < rounds {
-            logv(self.config, format!("pretty-printing round {} revision {:?}",
-                                      round, self.revision));
-            let proc_res = self.print_source(srcs[round].to_owned(), "expanded");
+        logv(self.config, format!("pretty-printing revision {:?}", self.revision));
+        let proc_res = self.print_source(src.to_owned(), "expanded");
 
-            if !proc_res.status.success() {
-                self.fatal_proc_rec(&format!("pretty-printing failed in round {} revision {:?}",
-                                             round, self.revision),
-                                    &proc_res);
-            }
-
-            let ProcRes{ stdout, .. } = proc_res;
-            srcs.push(stdout);
-            round += 1;
+        if !proc_res.status.success() {
+            self.fatal_proc_rec(
+                &format!("pretty-printing failed in revision {:?}", self.revision),
+                &proc_res);
         }
 
-        let mut expected = match self.props.pp_exact {
-            Some(ref file) => {
-                let filepath = self.testpaths.file.parent().unwrap().join(file);
-                let mut s = String::new();
-                File::open(&filepath).unwrap().read_to_string(&mut s).unwrap();
-                s
-            }
-            None => { srcs[srcs.len() - 2].clone() }
+        let ProcRes{ stdout, .. } = proc_res;
+
+        let mut expected = {
+            let filepath = self.testpaths.file.with_extension("pp");
+            let mut s = String::new();
+            File::open(&filepath).unwrap().read_to_string(&mut s).unwrap();
+            s
         };
-        let mut actual = srcs[srcs.len() - 1].clone();
 
-        if self.props.pp_exact.is_some() {
-            // Now we have to care about line endings
-            let cr = "\r".to_owned();
-            actual = actual.replace(&cr, "").to_owned();
-            expected = expected.replace(&cr, "").to_owned();
-        }
+        // Now we have to care about line endings
+        let actual = stdout.clone().replace("\r", "");
+        expected = expected.replace("\r", "");
 
         self.compare_source(&expected, &actual);
 
@@ -252,7 +232,7 @@ impl<'test> TestCx<'test> {
         if !self.props.pretty_expanded { return }
 
         // additionally, run `--pretty expanded` and try to build it.
-        let proc_res = self.print_source(srcs[round].clone(), "expanded");
+        let proc_res = self.print_source(stdout, "expanded");
         if !proc_res.status.success() {
             self.fatal_proc_rec("pretty-printing (expanded) failed", &proc_res);
         }
