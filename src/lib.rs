@@ -15,7 +15,7 @@
 #![forbid(non_snake_case)]
 #![forbid(unused_variables)]
 #![forbid(unreachable_patterns)]
-#![forbid(dead_code)]
+//#![forbid(dead_code)]
 
 
 #[cfg(not(feature = "norustc"))]
@@ -39,7 +39,7 @@ use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use common::{TestPaths, Pretty};
+use common::TestPaths;
 
 use self::header::EarlyProps;
 
@@ -200,16 +200,10 @@ pub fn is_test(file_name: &OsString) -> bool {
 pub fn make_test(config: &Config, testpaths: &TestPaths) -> test::TestDescAndFn {
     let early_props = EarlyProps::from_file(config, &testpaths.file);
 
-    // The `should-fail` annotation doesn't apply to pretty tests,
-    // since we run the pretty printer across all tests by default.
-    // If desired, we could add a `should-fail-pretty` annotation.
-    let should_panic = match config.mode {
-        Pretty => test::ShouldPanic::No,
-        _ => if early_props.should_fail {
-            test::ShouldPanic::Yes
-        } else {
-            test::ShouldPanic::No
-        }
+    let should_panic = if early_props.should_fail {
+        test::ShouldPanic::Yes
+    } else {
+        test::ShouldPanic::No
     };
 
     test::TestDescAndFn {

@@ -15,7 +15,6 @@ use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 
 use common::Config;
-use common;
 use util;
 
 /// Properties which must be known very early, before actually running
@@ -404,10 +403,6 @@ impl Config {
                 name == util::get_pointer_width(&self.target) ||    // pointer width
                 name == self.stage_id.split('-').next().unwrap() || // stage
                 Some(name) == util::get_env(&self.target) ||        // env
-                match self.mode {
-                    common::Pretty => name == "pretty",
-                    _ => false,
-                } ||
                 (self.target != self.host && name == "cross-compile")
         } else {
             false

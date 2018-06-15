@@ -1,25 +1,25 @@
 extern crate compiletest_rs as compiletest;
 
-use std::path::PathBuf;
+use std::env;
 
 fn run_mode(mode: &'static str) {
+    let mut config = compiletest::Config::default();
 
-    let mut config = compiletest::Config::default().tempdir();
-    let cfg_mode = mode.parse().expect("Invalid mode");
-
-    config.mode = cfg_mode;
-    config.src_base = PathBuf::from(format!("tests/{}", mode));
+    config.mode = mode.parse().expect("invalid mode");
     config.link_deps();
-    config.clean_rmeta();
+    //config.target_rustcflags = Some("-L deps/target/debug/deps".to_owned());
+    if let Ok(name) = env::var("TESTNAME") {
+        config.filter = Some(name);
+    }
+    config.src_base = format!("tests/{}", mode).into();
 
     compiletest::run_tests(&config);
 }
 
 #[test]
 fn compile_test() {
+    //run_mode("pretty");
     run_mode("compile-fail");
     run_mode("run-pass");
 
-    #[cfg(not(feature = "stable"))]
-    run_mode("pretty");
 }

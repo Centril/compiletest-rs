@@ -1,6 +1,4 @@
-// pretty-compare-only
-// pretty-mode:expanded
-// pp-exact:macro.pp
+extern crate serde_derive;
 
 macro_rules! square {
     ($x:expr) => {
@@ -11,3 +9,5 @@ macro_rules! square {
 fn f() -> i8 {
     square!(5)
 }
+
+fn main() {}

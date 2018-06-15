@@ -24,18 +24,6 @@ use runtest::dylib_env_var;
 pub enum Mode {
     CompileFail,
     RunPass,
-    Pretty,
-}
-
-impl Mode {
-    pub fn disambiguator(self) -> &'static str {
-        // Run-pass and pretty run-pass tests could run concurrently, and if they do,
-        // they need to keep their output segregated.
-        match self {
-            Pretty => ".pretty",
-            _ => "",
-        }
-    }
 }
 
 impl FromStr for Mode {
@@ -44,7 +32,6 @@ impl FromStr for Mode {
         match s {
             "compile-fail" => Ok(CompileFail),
             "run-pass" => Ok(RunPass),
-            "pretty" => Ok(Pretty),
             _ => Err(()),
         }
     }
@@ -52,12 +39,11 @@ impl FromStr for Mode {
 
 impl fmt::Display for Mode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Display::fmt(match *self {
-                              CompileFail => "compile-fail",
-                              RunPass => "run-pass",
-                              Pretty => "pretty",
-                          },
-                          f)
+        let mode = match *self {
+            CompileFail => "compile-fail",
+            RunPass => "run-pass",
+        };
+        fmt::Display::fmt(mode, f)
     }
 }
 

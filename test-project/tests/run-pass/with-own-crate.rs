@@ -1,3 +1,4 @@
-extern crate testp;
+//extern crate testp;
+// FIXME^
 
 fn main() {}

@@ -9,7 +9,7 @@
 // except according to those terms.
 
 use common::{Config, TestPaths};
-use common::{CompileFail, Pretty, RunPass};
+use common::{CompileFail, RunPass};
 use errors::{self, ErrorKind, Error};
 use json;
 use header::TestProps;
@@ -91,6 +91,8 @@ struct TestCx<'test> {
     revision: Option<&'test str>
 }
 
+const PRETTY_AUX_DIR: &str = ".pretty";
+
 impl<'test> TestCx<'test> {
     /// invoked once before any revisions have been processed
     fn init_all(&self) {
@@ -103,13 +105,12 @@ impl<'test> TestCx<'test> {
         match self.config.mode {
             CompileFail => self.run_cfail_test(),
             RunPass => self.run_rpass_test(),
-            Pretty => self.run_pretty_test(),
         }
     }
 
     /// Invoked after all revisions have executed.
     fn complete_all(&self) {
-        assert!(self.revision.is_none(), "init_all invoked for a revision");
+        assert!(self.revision.is_none(), "complete_all invoked for a revision");
     }
 
     fn run_cfail_test(&self) {
@@ -182,6 +183,8 @@ impl<'test> TestCx<'test> {
         if !proc_res.status.success() {
             self.fatal_proc_rec("test run failed!", &proc_res);
         }
+
+        self.run_pretty_test();
     }
 
     #[cfg(feature = "stable")]
@@ -191,6 +194,22 @@ impl<'test> TestCx<'test> {
 
     #[cfg(not(feature = "stable"))]
     fn run_pretty_test(&self) {
+        let expected_fp = self.testpaths.file.with_extension("pp");
+        let mut expected = match File::open(expected_fp) {
+            Err(ref err) if err.kind() == io::ErrorKind::NotFound => {
+                logv(self.config,
+                    "not testing for exact pretty-printing".to_owned());
+                return;
+            },
+            Err(err) => self.fatal(&format!("failed with {:?} in revision {:?}",
+                err, self.revision)),
+            Ok(mut file) => {
+                let mut s = String::new();
+                file.read_to_string(&mut s).unwrap();
+                s
+            }
+        };
+
         logv(self.config, "testing for exact pretty-printing".to_owned());
 
         let mut src = String::new();
@@ -205,14 +224,7 @@ impl<'test> TestCx<'test> {
                 &proc_res);
         }
 
-        let ProcRes{ stdout, .. } = proc_res;
-
-        let mut expected = {
-            let filepath = self.testpaths.file.with_extension("pp");
-            let mut s = String::new();
-            File::open(&filepath).unwrap().read_to_string(&mut s).unwrap();
-            s
-        };
+        let ProcRes { stdout, .. } = proc_res;
 
         // Now we have to care about line endings
         let actual = stdout.clone().replace("\r", "");
@@ -220,34 +232,12 @@ impl<'test> TestCx<'test> {
 
         self.compare_source(&expected, &actual);
 
-        // If we're only making sure that the output matches then just stop here
-        if self.props.pretty_compare_only { return; }
-
-        // Finally, let's make sure it actually appears to remain valid code
-        let proc_res = self.typecheck_source(actual);
-        if !proc_res.status.success() {
-            self.fatal_proc_rec("pretty-printed source does not typecheck", &proc_res);
-        }
-
-        if !self.props.pretty_expanded { return }
-
-        // additionally, run `--pretty expanded` and try to build it.
-        let proc_res = self.print_source(stdout, "expanded");
-        if !proc_res.status.success() {
-            self.fatal_proc_rec("pretty-printing (expanded) failed", &proc_res);
-        }
-
-        let ProcRes{ stdout: expanded_src, .. } = proc_res;
-        let proc_res = self.typecheck_source(expanded_src);
-        if !proc_res.status.success() {
-            self.fatal_proc_rec(
-                "pretty-printed source (expanded) does not typecheck",
-                &proc_res);
-        }
+        // We stop here; the run-pass or compile-fail logic will check if the
+        // expansion type checks.
     }
 
     fn print_source(&self, src: String, pretty_type: &str) -> ProcRes {
-        let aux_dir = self.aux_output_dir_name();
+        let aux_dir = self.aux_output_dir_name(PRETTY_AUX_DIR);
 
         let mut rustc = Command::new(&self.config.rustc_path);
         rustc.arg("-")
@@ -297,7 +287,7 @@ actual:\n\
             &*self.config.target
         };
 
-        let aux_dir = self.aux_output_dir_name();
+        let aux_dir = self.aux_output_dir_name(PRETTY_AUX_DIR);
 
         rustc.arg("-")
             .arg("-Zno-codegen")
@@ -313,7 +303,7 @@ actual:\n\
         rustc.args(self.split_maybe_args(&self.config.target_rustcflags));
         rustc.args(&self.props.compile_flags);
 
-        self.compose_and_run_compiler(rustc, Some(src))
+        self.compose_and_run_compiler(rustc, Some(src), PRETTY_AUX_DIR)
     }
 
     fn check_error_patterns(&self,
@@ -489,7 +479,7 @@ actual:\n\
         let mut rustc = self.make_compile_args(
             &self.testpaths.file, TargetLocation::ThisFile(self.make_exe_name()));
 
-        rustc.arg("-L").arg(&self.aux_output_dir_name());
+        rustc.arg("-L").arg(&self.aux_output_dir_name(""));
 
         match self.config.mode {
             CompileFail => {
@@ -503,7 +493,7 @@ actual:\n\
             _ => {}
         }
 
-        self.compose_and_run_compiler(rustc, None)
+        self.compose_and_run_compiler(rustc, None, "")
     }
 
     fn exec_compiled_test(&self) -> ProcRes {
@@ -524,7 +514,7 @@ actual:\n\
             // emulator with the arguments specified (in the environment we give
             // the process) and then report back the same result.
             _ if self.config.remote_test_client.is_some() => {
-                let aux_dir = self.aux_output_dir_name();
+                let aux_dir = self.aux_output_dir_name("");
                 let ProcArgs { mut prog, args } = self.make_run_args();
                 if let Ok(entries) = aux_dir.read_dir() {
                     for entry in entries {
@@ -548,7 +538,7 @@ actual:\n\
                                      None)
             }
             _ => {
-                let aux_dir = self.aux_output_dir_name();
+                let aux_dir = self.aux_output_dir_name("");
                 let ProcArgs { prog, args } = self.make_run_args();
                 let mut program = Command::new(&prog);
                 program.args(args)
@@ -586,12 +576,15 @@ actual:\n\
         }
     }
 
-    fn compose_and_run_compiler(&self, mut rustc: Command, input: Option<String>) -> ProcRes {
+    fn compose_and_run_compiler
+        (&self, mut rustc: Command, input: Option<String>, aux_suffix: &str)
+        -> ProcRes
+    {
         if !self.props.aux_builds.is_empty() {
-            create_dir_all(&self.aux_output_dir_name()).unwrap();
+            create_dir_all(&self.aux_output_dir_name(aux_suffix)).unwrap();
         }
 
-        let aux_dir = self.aux_output_dir_name();
+        let aux_dir = self.aux_output_dir_name(aux_suffix);
 
         for rel_ab in &self.props.aux_builds {
             let aux_testpaths = self.compute_aux_test_paths(rel_ab);
@@ -599,7 +592,7 @@ actual:\n\
                                                      self.revision,
                                                      self.config);
             let aux_output = {
-                let f = self.make_lib_name(&self.testpaths.file);
+                let f = self.make_lib_name(&self.testpaths.file, aux_suffix);
                 let parent = f.parent().unwrap();
                 TargetLocation::ThisDirectory(parent.to_path_buf())
             };
@@ -738,8 +731,7 @@ actual:\n\
                     rustc.args(&["--error-format", "json"]);
                 }
             }
-            RunPass |
-            Pretty => {
+            RunPass => {
                 // do not use JSON output
             }
         }
@@ -774,11 +766,11 @@ actual:\n\
         rustc
     }
 
-    fn make_lib_name(&self, auxfile: &Path) -> PathBuf {
+    fn make_lib_name(&self, auxfile: &Path, aux_suffix: &str) -> PathBuf {
         // what we return here is not particularly important, as it
         // happens; rustc ignores everything except for the directory.
         let auxname = self.output_testname(auxfile);
-        self.aux_output_dir_name().join(&auxname)
+        self.aux_output_dir_name(aux_suffix).join(&auxname)
     }
 
     fn make_exe_name(&self) -> PathBuf {
@@ -902,10 +894,10 @@ actual:\n\
         self.output_base_name().with_extension(extension)
     }
 
-    fn aux_output_dir_name(&self) -> PathBuf {
+    fn aux_output_dir_name(&self, suffix: &str) -> PathBuf {
         let f = self.output_base_name();
         let mut fname = f.file_name().unwrap().to_os_string();
-        fname.push(&format!("{}.aux", self.config.mode.disambiguator()));
+        fname.push(&format!("{}.aux", suffix));
         f.with_file_name(&fname)
     }
 
