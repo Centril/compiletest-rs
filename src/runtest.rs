@@ -207,7 +207,7 @@ impl<'test> TestCx<'test> {
         while round < rounds {
             logv(self.config, format!("pretty-printing round {} revision {:?}",
                                       round, self.revision));
-            let proc_res = self.print_source(srcs[round].to_owned(), &self.props.pretty_mode);
+            let proc_res = self.print_source(srcs[round].to_owned(), "expanded");
 
             if !proc_res.status.success() {
                 self.fatal_proc_rec(&format!("pretty-printing failed in round {} revision {:?}",

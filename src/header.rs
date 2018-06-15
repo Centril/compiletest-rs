@@ -113,8 +113,6 @@ pub struct TestProps {
     pub no_prefer_dynamic: bool,
     // Run --pretty expanded when running pretty printing tests
     pub pretty_expanded: bool,
-    // Which pretty mode are we testing with, default to 'normal'
-    pub pretty_mode: String,
     // Only compare pretty output and don't try compiling
     pub pretty_compare_only: bool,
     // Patterns which must not appear in the output of a cfail test.
@@ -147,7 +145,6 @@ impl TestProps {
             check_stdout: false,
             no_prefer_dynamic: false,
             pretty_expanded: false,
-            pretty_mode: "normal".to_string(),
             pretty_compare_only: false,
             forbid_output: vec![],
             must_compile_successfully: false,
@@ -226,10 +223,6 @@ impl TestProps {
 
             if !self.pretty_expanded {
                 self.pretty_expanded = config.parse_pretty_expanded(ln);
-            }
-
-            if let Some(m) = config.parse_pretty_mode(ln) {
-                self.pretty_mode = m;
             }
 
             if !self.pretty_compare_only {
@@ -365,10 +358,6 @@ impl Config {
 
     fn parse_pretty_expanded(&self, line: &str) -> bool {
         self.parse_name_directive(line, "pretty-expanded")
-    }
-
-    fn parse_pretty_mode(&self, line: &str) -> Option<String> {
-        self.parse_name_value_directive(line, "pretty-mode")
     }
 
     fn parse_pretty_compare_only(&self, line: &str) -> bool {
